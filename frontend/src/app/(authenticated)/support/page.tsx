@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { PaperClipIcon, ArrowUpIcon, FolderIcon } from '@heroicons/react/24/outline';
 import DocumentUploadModal from '@/components/support/DocumentUploadModal';
+import { supportApi, ChatMessage as ApiChatMessage } from '@/lib/api/support';
+import { useAuth } from '@/hooks/useAuth';
 
-interface Message {
+interface Message extends ApiChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
@@ -21,7 +23,7 @@ interface SupportAction {
   currentWorkload: number;
 }
 
-// Mock data - replace with API calls later
+// Mock data for support history - will be replaced with API data later
 const mockSupportHistory: SupportAction[] = [
   {
     id: '1',
@@ -50,18 +52,12 @@ const formatTimestamp = (date: Date) => {
 const WorkloadLevel: React.FC<{ level: number }> = ({ level }) => {
   const getWorkloadColor = (level: number) => {
     switch (level) {
-      case 1:
-        return 'bg-red-100 text-red-800';
-      case 2:
-        return 'bg-orange-100 text-orange-800';
-      case 3:
-        return 'bg-yellow-100 text-yellow-800';
-      case 4:
-        return 'bg-green-100 text-green-800';
-      case 5:
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 1: return 'bg-red-100 text-red-800';
+      case 2: return 'bg-orange-100 text-orange-800';
+      case 3: return 'bg-yellow-100 text-yellow-800';
+      case 4: return 'bg-green-100 text-green-800';
+      case 5: return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -77,50 +73,117 @@ export default function SupportPage() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const { profile } = useAuth();
 
   useEffect(() => {
-    // Initialize messages after component mounts
-    setMessages([
-      {
-        id: '1',
-        role: 'assistant',
-        content: 'Hello! I\'m your MentalEEG support assistant. I can help you with managing employee mental workload and provide suggestions based on your company\'s guidelines. How can I assist you today?',
-        timestamp: formatTimestamp(new Date()),
-      },
-    ]);
+    const loadChatHistory = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+
+        const history = await supportApi.getChatHistory(token);
+        const formattedHistory = history.map((msg): Message => ({
+          id: msg.id || Date.now().toString(),
+          role: msg.is_ai_response ? 'assistant' : 'user',
+          content: msg.message,
+          timestamp: msg.timestamp || formatTimestamp(new Date()),
+          message: msg.message,
+          is_ai_response: msg.is_ai_response,
+        }));
+
+        setMessages(formattedHistory);
+      } catch (error) {
+        console.error('Failed to load chat history:', error);
+      }
+    };
+
+    loadChatHistory();
   }, []);
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
+
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      console.error('No access token found');
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
       content: input,
       timestamp: formatTimestamp(new Date()),
+      message: input,
+      is_ai_response: false,
     };
 
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
 
-    // TODO: Implement actual OpenAI API call with RAG
-    // Simulating API call delay
-    setTimeout(() => {
+    try {
+      const response = await supportApi.sendMessage(input, token);
+      
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'This is a mock response. In the actual implementation, this will be replaced with an AI-generated response using the OpenAI API and your company\'s guidelines through RAG.',
-        timestamp: formatTimestamp(new Date()),
+        content: response.message,
+        timestamp: response.timestamp || formatTimestamp(new Date()),
+        message: response.message,
+        is_ai_response: true,
       };
+
       setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again later.',
+        timestamp: formatTimestamp(new Date()),
+        message: 'Sorry, I encountered an error. Please try again later.',
+        is_ai_response: true,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleFileUpload = async (files: File[]) => {
-    // TODO: Implement actual file upload to backend
-    console.log('Uploading files:', files);
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+
+      for (const file of files) {
+        await supportApi.uploadDocument(file, token);
+      }
+      
+      // Add success message to chat
+      const successMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Documents uploaded successfully! I\'ll analyze them and use them to provide better assistance.',
+        timestamp: formatTimestamp(new Date()),
+        message: 'Documents uploaded successfully!',
+        is_ai_response: true,
+      };
+      setMessages(prev => [...prev, successMessage]);
+    } catch (error) {
+      console.error('Failed to upload files:', error);
+      // Add error message to chat
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error while uploading the documents. Please try again later.',
+        timestamp: formatTimestamp(new Date()),
+        message: 'Error uploading documents.',
+        is_ai_response: true,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    }
   };
 
   return (
@@ -159,10 +222,8 @@ export default function SupportPage() {
                     : 'bg-gray-100 text-gray-900'
                 }`}
               >
-                <p className="text-sm">{message.content}</p>
-                <p className="text-xs mt-1 opacity-70">
-                  {message.timestamp}
-                </p>
+                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <p className="text-xs mt-1 opacity-70">{message.timestamp}</p>
               </div>
             </div>
           ))}
