@@ -1,23 +1,27 @@
 from rest_framework import serializers
-from django.contrib.auth import get_user_model
-from .models import Department, EmployeeMetrics
+from .models import Employee
 
-User = get_user_model()
-
-class UserSerializer(serializers.ModelSerializer):
+class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 
-                 'employee_id', 'department', 'role')
-        read_only_fields = ('username',)
+        model = Employee
+        fields = [
+            'id',
+            'name',
+            'email',
+            'department',
+            'current_project',
+            'current_workload_level',
+            'previous_workload_level',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
 
-class DepartmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Department
-        fields = '__all__'
-
-class EmployeeMetricsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeMetrics
-        fields = ('id', 'mental_workload', 'stress_level', 'focus_score', 'timestamp')
-        read_only_fields = ('user',) 
+    def validate(self, data):
+        # Ensure workload levels are between 1 and 5
+        for field in ['current_workload_level', 'previous_workload_level']:
+            if field in data and (data[field] < 1 or data[field] > 5):
+                raise serializers.ValidationError(
+                    f"{field} must be between 1 and 5"
+                )
+        return data

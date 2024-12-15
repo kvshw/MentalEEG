@@ -1,31 +1,48 @@
-from rest_framework import generics, permissions
-from django.contrib.auth import get_user_model
-from .models import Department, EmployeeMetrics
-from .serializers import UserSerializer, DepartmentSerializer, EmployeeMetricsSerializer
+from rest_framework import viewsets, permissions
+from rest_framework.response import Response
+from .models import Employee
+from .serializers import EmployeeSerializer
+import logging
 
-User = get_user_model()
+logger = logging.getLogger(__name__)
 
-class EmployeeListView(generics.ListAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+class EmployeeViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint that allows employees to be viewed or edited.
+    """
+    queryset = Employee.objects.all()
+    serializer_class = EmployeeSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-class EmployeeDetailView(generics.RetrieveUpdateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = (permissions.IsAuthenticated,)
-
-class EmployeeMetricsView(generics.ListCreateAPIView):
-    serializer_class = EmployeeMetricsSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+    def list(self, request, *args, **kwargs):
+        try:
+            logger.debug(f"User {request.user} requesting employees list")
+            logger.debug(f"Request headers: {request.headers}")
+            
+            queryset = self.get_queryset()
+            logger.debug(f"Found {queryset.count()} employees")
+            
+            serializer = self.get_serializer(queryset, many=True)
+            logger.debug(f"Serialized data: {serializer.data}")
+            
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error in employee list view: {str(e)}")
+            logger.error(f"Request user: {request.user}")
+            logger.error(f"Request auth: {request.auth}")
+            raise
 
     def get_queryset(self):
-        return EmployeeMetrics.objects.filter(user=self.request.user)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class DepartmentListView(generics.ListCreateAPIView):
-    queryset = Department.objects.all()
-    serializer_class = DepartmentSerializer
-    permission_classes = (permissions.IsAuthenticated,)
+        """
+        Optionally restricts the returned employees by filtering against
+        query parameters in the URL.
+        """
+        queryset = Employee.objects.all()
+        logger.debug(f"Base queryset count: {queryset.count()}")
+        
+        department = self.request.query_params.get('department', None)
+        if department is not None:
+            queryset = queryset.filter(department=department)
+            logger.debug(f"Filtered queryset by department '{department}', count: {queryset.count()}")
+        
+        return queryset

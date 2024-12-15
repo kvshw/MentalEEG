@@ -1,24 +1,22 @@
 from django.db import models
-from django.conf import settings
+from django.core.validators import MinValueValidator, MaxValueValidator
 
-class Department(models.Model):
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
+class Employee(models.Model):
+    name = models.CharField(max_length=255)
+    email = models.EmailField(unique=True)
+    department = models.CharField(max_length=100)
+    current_project = models.CharField(max_length=255, blank=True, null=True)
+    current_workload_level = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
+    previous_workload_level = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(5)]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return self.name
-
-class EmployeeMetrics(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    mental_workload = models.FloatField()
-    stress_level = models.FloatField()
-    focus_score = models.FloatField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-
     class Meta:
-        ordering = ['-timestamp']
+        ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.username} - {self.timestamp}"
+        return f"{self.name} - {self.department}"

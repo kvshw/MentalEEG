@@ -1,9 +1,20 @@
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import (
+    ResourceViewSet, ResourceCategoryViewSet, ResourceRatingViewSet,
+    ChatMessageViewSet, GuidelineDocumentViewSet, GenerateSupportActionView,
+    ChatView
+)
+
+router = DefaultRouter()
+router.register(r'resources', ResourceViewSet, basename='resource')
+router.register(r'categories', ResourceCategoryViewSet, basename='category')
+router.register(r'ratings', ResourceRatingViewSet, basename='rating')
+router.register(r'chat-messages', ChatMessageViewSet, basename='chat-message')
+router.register(r'guidelines', GuidelineDocumentViewSet, basename='guideline')
 
 urlpatterns = [
-    path('chat/', views.ChatView.as_view(), name='chat'),
-    path('resources/', views.ResourceListView.as_view(), name='resource-list'),
-    path('documents/', views.DocumentUploadView.as_view(), name='document-upload'),
-    path('ai-assist/', views.AIAssistView.as_view(), name='ai-assist'),
+    path('', include(router.urls)),
+    path('chat/', ChatView.as_view(), name='chat'),
+    path('generate-support-action/', GenerateSupportActionView.as_view(), name='generate-support-action'),
 ] 
