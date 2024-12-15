@@ -7,23 +7,40 @@ import { useEffect, useState } from 'react';
 export const useAuth = () => {
   const router = useRouter();
   const [token, setToken] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setToken(localStorage.getItem('accessToken'));
-    }
-  }, []);
+    const initializeAuth = async () => {
+      if (typeof window !== 'undefined') {
+        const storedToken = localStorage.getItem('accessToken');
+        if (storedToken) {
+          try {
+            await authApi.verifyToken(storedToken);
+            setToken(storedToken);
+          } catch (error) {
+            console.error('Token verification failed:', error);
+            // Token is invalid, clear auth state
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            deleteCookie('isAuthenticated');
+            router.push('/login');
+          }
+        }
+      }
+      setIsInitialized(true);
+    };
+
+    initializeAuth();
+  }, [router]);
 
   const loginMutation = useMutation({
     mutationFn: (credentials: LoginCredentials) => authApi.login(credentials),
     onSuccess: (data) => {
-      // Store tokens in localStorage
       localStorage.setItem('accessToken', data.access);
       localStorage.setItem('refreshToken', data.refresh);
       setToken(data.access);
-      // Set authentication cookie
       setCookie('isAuthenticated', 'true', {
-        maxAge: 30 * 24 * 60 * 60, // 30 days
+        maxAge: 30 * 24 * 60 * 60,
         path: '/',
       });
       router.push('/dashboard');
@@ -31,9 +48,9 @@ export const useAuth = () => {
     onError: (error: any) => {
       console.error('Login error:', error);
       if (error.response?.status === 401) {
-        return new Error('Invalid credentials. Please try again.');
+        throw new Error('Invalid credentials. Please try again.');
       }
-      return new Error('An error occurred while signing in. Please try again.');
+      throw new Error('An error occurred while signing in. Please try again.');
     },
   });
 
@@ -53,21 +70,28 @@ export const useAuth = () => {
 
   const { data: profile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['profile'],
-    queryFn: () => {
-      const token = localStorage.getItem('accessToken');
-      if (!token) return null;
-      return authApi.getProfile(token);
-    },
-    enabled: typeof window !== 'undefined' && !!localStorage.getItem('accessToken'),
+    queryFn: () => authApi.getProfile(),
+    enabled: !!token && isInitialized,
     retry: false,
+    onError: (error: any) => {
+      if (error.response?.status === 401) {
+        logout();
+      }
+    },
   });
 
-  const logout = () => {
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    setToken(null);
-    deleteCookie('isAuthenticated');
-    router.push('/login');
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setToken(null);
+      deleteCookie('isAuthenticated');
+      router.push('/login');
+    }
   };
 
   return {
@@ -81,5 +105,6 @@ export const useAuth = () => {
     isRegistering: registerMutation.isPending,
     loginError: loginMutation.error,
     registerError: registerMutation.error,
+    isAuthenticated: !!token && isInitialized,
   };
 }; 

@@ -23,6 +23,12 @@ export interface CreateEmployeeDto {
 
 export interface UpdateEmployeeDto extends Partial<CreateEmployeeDto> {}
 
+interface WorkloadUpdateData {
+    employeeId: string;
+    workloadLevel: number;
+    timestamp: string;
+}
+
 class EmployeeApi {
     private transformToSnakeCase(data: CreateEmployeeDto | UpdateEmployeeDto) {
         return {
@@ -65,12 +71,17 @@ class EmployeeApi {
                 throw new Error('No data received from API');
             }
 
-            // Handle paginated response
-            const results = Array.isArray(response.data) ? response.data : 
-                           response.data.results ? response.data.results : 
-                           null;
-
-            if (!results) {
+            // Handle different response formats
+            let results;
+            if (Array.isArray(response.data)) {
+                results = response.data;
+            } else if (response.data.results) {
+                results = response.data.results;
+            } else if (Array.isArray(Object.values(response.data)[0])) {
+                // Handle case where data is wrapped in an object
+                results = Object.values(response.data)[0];
+            } else {
+                console.error('Unexpected API response format:', response.data);
                 throw new Error(`Invalid API response format: ${JSON.stringify(response.data)}`);
             }
 
@@ -139,6 +150,33 @@ class EmployeeApi {
                 message: error.message,
                 status: error.response?.status,
                 data: error.response?.data,
+            });
+            throw error;
+        }
+    }
+
+    async updateWorkload(data: WorkloadUpdateData) {
+        try {
+            console.log('Updating workload with data:', data);
+            const response = await api.post(`/employees/${data.employeeId}/workload/`, {
+                workloadLevel: data.workloadLevel,
+                timestamp: data.timestamp
+            });
+            console.log('Workload update response:', response.data);
+            
+            // Transform the response data to match our interface
+            return {
+                id: response.data.id,
+                currentWorkloadLevel: response.data.current_workload_level,
+                previousWorkloadLevel: response.data.previous_workload_level,
+                lastWorkloadUpdate: response.data.last_workload_update
+            };
+        } catch (error: any) {
+            console.error('Error updating workload:', {
+                message: error.message,
+                status: error.response?.status,
+                data: error.response?.data,
+                config: error.config
             });
             throw error;
         }

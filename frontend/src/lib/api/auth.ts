@@ -1,63 +1,48 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+import api from './index';
 
 export interface LoginCredentials {
-  username: string;
-  password: string;
+    username: string;
+    password: string;
 }
 
 export interface RegisterData {
-  username: string;
-  password: string;
-  password2: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  employee_id: string;
-  department: string;
-  role: string;
-}
-
-export interface AuthResponse {
-  user: {
-    id: number;
     username: string;
     email: string;
-    first_name: string;
-    last_name: string;
-    employee_id: string;
-    department: string;
-    role: string;
-  };
-  access: string;
-  refresh: string;
+    password: string;
+}
+
+export interface UserProfile {
+    id: string;
+    username: string;
+    email: string;
 }
 
 export const authApi = {
-  login: async (credentials: LoginCredentials): Promise<AuthResponse> => {
-    const response = await axios.post(`${API_URL}/users/token/`, credentials);
-    return response.data;
-  },
+    login: async (credentials: LoginCredentials) => {
+        const response = await api.post('/auth/token/', credentials);
+        return response.data;
+    },
 
-  register: async (data: RegisterData): Promise<AuthResponse> => {
-    const response = await axios.post(`${API_URL}/users/register/`, data);
-    return response.data;
-  },
+    register: async (data: RegisterData) => {
+        const response = await api.post('/auth/register/', data);
+        return response.data;
+    },
 
-  getProfile: async (token: string) => {
-    const response = await axios.get(`${API_URL}/users/profile/`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return response.data;
-  },
+    logout: async () => {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+            await api.post('/auth/logout/', { refresh_token: refreshToken });
+        }
+        return { success: true };
+    },
 
-  refreshToken: async (refresh: string) => {
-    const response = await axios.post(`${API_URL}/users/token/refresh/`, {
-      refresh,
-    });
-    return response.data;
-  },
+    verifyToken: async (token: string) => {
+        const response = await api.post('/auth/token/verify/', { token });
+        return response.data;
+    },
+
+    getProfile: async () => {
+        const response = await api.get('/auth/profile/');
+        return response.data;
+    }
 }; 

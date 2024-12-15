@@ -8,6 +8,7 @@ import {
   UserGroupIcon,
   BuildingOfficeIcon,
   QuestionMarkCircleIcon,
+  ChartBarIcon,
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
 } from '@heroicons/react/24/outline';
@@ -18,6 +19,7 @@ const navigation = [
   { name: 'Employee Well-being', href: '/employees', icon: UserGroupIcon },
   { name: 'Department Overview', href: '/departments', icon: BuildingOfficeIcon },
   { name: 'Support Resources', href: '/support', icon: QuestionMarkCircleIcon },
+  { name: 'Workload Management', href: '/workload', icon: ChartBarIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 

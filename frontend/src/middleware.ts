@@ -5,14 +5,20 @@ export function middleware(request: NextRequest) {
     const isAuthenticated = request.cookies.get('isAuthenticated')?.value === 'true';
     const isAuthPage = request.nextUrl.pathname.startsWith('/login') || 
                       request.nextUrl.pathname.startsWith('/register');
+    const isRootPage = request.nextUrl.pathname === '/';
 
     // If trying to access auth pages while authenticated, redirect to dashboard
     if (isAuthenticated && isAuthPage) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
+    // If accessing root page while authenticated, redirect to dashboard
+    if (isAuthenticated && isRootPage) {
+        return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
     // If trying to access protected pages while not authenticated, redirect to login
-    if (!isAuthenticated && !isAuthPage && request.nextUrl.pathname !== '/') {
+    if (!isAuthenticated && !isAuthPage && !isRootPage) {
         const loginUrl = new URL('/login', request.url);
         loginUrl.searchParams.set('from', request.nextUrl.pathname);
         return NextResponse.redirect(loginUrl);
