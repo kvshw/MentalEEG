@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
+import { ArrowLeftIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { Input } from '@/components/ui/input';
 import {
     Table,
     TableBody,
@@ -15,32 +17,20 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { toast } from '@/components/ui/use-toast';
-import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { supportApi } from '@/lib/api/support';
 import { employeeApi } from '@/lib/api/employee';
-import { useEmployeeStore } from '@/lib/stores/employee';
-
-interface SupportAction {
-    immediate_action: string;
-    long_term_strategy: string;
-    resources: string[];
-    priority_level: string;
-    created_at: string;
-    current_workload_level: number;
-    previous_workload_level: number;
-}
-
-interface EmployeeWithSupport extends Employee {
-    supportHistory: SupportAction[];
-}
+import { supportApi } from '@/lib/api/support';
+import { SupportAction, SupportActionResponse } from '@/types/support';
+import { EmployeeWithSupport } from '@/types/employee';
 
 export default function EmployeeProfilePage({ params }: { params: { id: string } }) {
     const router = useRouter();
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isUpdatingWorkload, setIsUpdatingWorkload] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [employee, setEmployee] = useState<EmployeeWithSupport | null>(null);
+    const [newWorkloadLevel, setNewWorkloadLevel] = useState<string>('');
 
     const fetchSupportHistory = async (employeeId: string) => {
         try {
@@ -83,6 +73,53 @@ export default function EmployeeProfilePage({ params }: { params: { id: string }
 
         fetchData();
     }, [params.id]);
+
+    const handleUpdateWorkload = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        if (!employee || !newWorkloadLevel) return;
+
+        const workloadLevel = Number(newWorkloadLevel);
+        if (workloadLevel < 1 || workloadLevel > 5) {
+            toast({
+                title: "Invalid Input",
+                description: "Workload level must be between 1 and 5",
+                variant: "destructive"
+            });
+            return;
+        }
+
+        setIsUpdatingWorkload(true);
+        try {
+            await employeeApi.updateWorkload({
+                employeeId: employee.id,
+                workloadLevel,
+                timestamp: new Date().toISOString()
+            });
+
+            // Update the employee state with new workload levels
+            setEmployee(prev => prev ? {
+                ...prev,
+                previousWorkloadLevel: prev.currentWorkloadLevel,
+                currentWorkloadLevel: workloadLevel
+            } : null);
+
+            setNewWorkloadLevel('');
+            toast({
+                title: "Success",
+                description: `Updated workload level to ${workloadLevel}`,
+                variant: "default"
+            });
+        } catch (error) {
+            console.error('Error updating workload:', error);
+            toast({
+                title: "Error",
+                description: "Failed to update workload level",
+                variant: "destructive"
+            });
+        } finally {
+            setIsUpdatingWorkload(false);
+        }
+    };
 
     const getWorkloadBadge = (level: number) => {
         const getBadgeColor = (level: number) => {
@@ -162,10 +199,11 @@ export default function EmployeeProfilePage({ params }: { params: { id: string }
                 duration: 10000,
             });
         } catch (error) {
+            console.error('Error generating support action:', error);
             toast({
-                title: "Error",
-                description: "Failed to generate support action. Please try again.",
-                variant: "destructive"
+                title: 'Error',
+                description: 'Failed to generate support action',
+                variant: 'destructive',
             });
         } finally {
             setIsGenerating(false);
@@ -251,30 +289,38 @@ export default function EmployeeProfilePage({ params }: { params: { id: string }
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-orange-100 shadow-sm">
-                    <CardHeader className="bg-orange-50 border-b border-orange-100">
-                        <CardTitle className="text-gray-900">Employee Information</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4 p-6">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-sm text-gray-500">Employee ID</p>
-                                <p className="font-medium text-gray-900">{employee.id}</p>
+                <div className="space-y-6">
+                    <Card className="border-orange-100 shadow-sm">
+                        <CardHeader className="bg-orange-50 border-b border-orange-100">
+                            <CardTitle className="text-gray-900">Employee Information</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4 p-6">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm text-gray-500">Employee ID</p>
+                                    <p className="font-medium text-gray-900">{employee.id}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Department</p>
+                                    <p className="font-medium text-gray-900">{employee.department}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Current Project</p>
+                                    <p className="font-medium text-gray-900">{employee.currentProject || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-gray-500">Email</p>
+                                    <p className="font-medium text-gray-900">{employee.email}</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-sm text-gray-500">Department</p>
-                                <p className="font-medium text-gray-900">{employee.department}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500">Current Project</p>
-                                <p className="font-medium text-gray-900">{employee.currentProject || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm text-gray-500">Email</p>
-                                <p className="font-medium text-gray-900">{employee.email}</p>
-                            </div>
-                        </div>
-                        <div className="pt-4 border-t border-gray-100">
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-orange-100 shadow-sm">
+                        <CardHeader className="bg-orange-50 border-b border-orange-100">
+                            <CardTitle className="text-gray-900">Workload Management</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4 p-6">
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <p className="text-sm text-gray-500">Current Workload Level</p>
@@ -285,9 +331,44 @@ export default function EmployeeProfilePage({ params }: { params: { id: string }
                                     {getWorkloadBadge(employee.previousWorkloadLevel)}
                                 </div>
                             </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                            
+                            <form onSubmit={handleUpdateWorkload} className="space-y-4 pt-4 border-t border-gray-100">
+                                <div>
+                                    <label htmlFor="workloadLevel" className="block text-sm font-medium text-gray-700">
+                                        Update Workload Level (1-5)
+                                    </label>
+                                    <div className="flex gap-2 mt-1">
+                                        <Input
+                                            id="workloadLevel"
+                                            type="number"
+                                            min="1"
+                                            max="5"
+                                            value={newWorkloadLevel}
+                                            onChange={(e) => setNewWorkloadLevel(e.target.value)}
+                                            className="flex-1"
+                                            disabled={isUpdatingWorkload}
+                                            required
+                                        />
+                                        <Button 
+                                            type="submit" 
+                                            className="bg-orange-500 hover:bg-orange-600 text-white"
+                                            disabled={isUpdatingWorkload}
+                                        >
+                                            {isUpdatingWorkload ? (
+                                                <div className="flex items-center">
+                                                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                                                    Updating...
+                                                </div>
+                                            ) : (
+                                                'Update'
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </form>
+                        </CardContent>
+                    </Card>
+                </div>
 
                 <Card className="border-orange-100 shadow-sm">
                     <CardHeader className="bg-orange-50 border-b border-orange-100">
